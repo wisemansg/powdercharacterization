@@ -1,256 +1,216 @@
-"""
-# FE610-GCA: Financial Econometrics — Graded Code Activity 1
+```markdown
+# Powder Characterization of Ti-6Al-4V Alloy 🔬
 
 <p align="center">
+  <img src="https://img.shields.io/badge/Powder%20Metallurgy-4B0082?logo=materialdesign&logoColor=white" />
+  <img src="https://img.shields.io/badge/Ti-6Al-4V-00CED1?logo=titanium&logoColor=white" />
+  <img src="https://img.shields.io/badge/SEM--EDS-FF4500?logo=electron&logoColor=white" />
+  <img src="https://img.shields.io/badge/Additive%20Manufacturing-2E8B57?logo=3d&logoColor=white" />
   <img src="https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white" />
-  <img src="https://img.shields.io/badge/NumPy-013243?logo=numpy&logoColor=white" />
-  <img src="https://img.shields.io/badge/Pandas-150458?logo=pandas&logoColor=white" />
-  <img src="https://img.shields.io/badge/SciPy-8CAAE6?logo=scipy&logoColor=white" />
-  <img src="https://img.shields.io/badge/Statsmodels-012169?logo=statsmodels&logoColor=white" />
-  <img src="https://img.shields.io/badge/ARCH%20Model-008080?logo=python&logoColor=white" />
-  <img src="https://img.shields.io/badge/Time%20Series%20Analysis-FF6F00?logo=analytics&logoColor=white" />
-  <img src="https://img.shields.io/badge/Financial%20Econometrics-MScFE%20610-blue" />
 </p>
 
 ---
 
-## Overview
-This repository documents Graded Code Activity 1 for MScFE 610: Financial Econometrics. The activity covers foundational econometrics workflows, including return calculation, asset return properties, stationarity testing, and baseline time-series estimation ($AR$, $MA$, $ARIMA$, and $ARCH$).
-
----
-
-## Part 1: Financial Time Series Preprocessing & Properties
-
-### Problem 1.1: Log-Returns and Summary Statistics
-
-#### Objective
-Compute daily log-returns from raw asset closing prices and calculate baseline descriptive statistics: Mean ($\mu$), Standard Deviation ($\sigma$), Skewness ($S$), and Excess Kurtosis ($K$).
-
-#### Mathematical Definition
-Given closing price $P_t$, the continuous log-return is defined as:
-$$r_t = \ln(P_t) - \ln(P_{t-1}) = \ln\left(\frac{P_t}{P_{t-1}}\right)$$
-
----
-
-### Problem 1.2: Augmented Dickey-Fuller (ADF) Stationarity Diagnostic
-
-#### Objective
-Test whether closing prices and continuous log-returns are stationary processes using the Augmented Dickey-Fuller test.
-
-#### Regression Model
-$$\Delta y_t = \alpha + \beta t + \gamma y_{t-1} + \sum_{i=1}^p \delta_i \Delta y_{t-i} + \epsilon_t$$
-
-#### Hypotheses
-$H_0$: $\gamma = 0$ (Unit root present; non-stationary process).  
-$H_1$: $\gamma < 0$ (No unit root; stationary process).
-
----
-
-## Part 2: ARMA / ARIMA Parameter Estimation
-
-### Problem 2.1: Order Identification via ACF/PACF & Automated Search
-
-#### Objective
-Fit an $ARIMA(p, d, q)$ model to daily log-returns, selecting optimal orders $(p, q)$ by minimizing the Akaike Information Criterion ($\text{AIC}$).
-
----
-
-## Part 3: Baseline ARCH(1) Model Estimation
-
-### Problem 3.1: Volatility Clustering & ARCH(1) Specification
-
-#### Objective
-Estimate a zero-mean $ARCH(1)$ volatility model to model conditional heteroskedasticity in daily log-returns:
-$$r_t = \sigma_t \epsilon_t, \quad \epsilon_t \sim \mathcal{N}(0, 1)$$
-$$\sigma_t^2 = \omega + \alpha_1 r_{t-1}^2$$
-
-Calculate parameter estimates $\hat{\omega}$ and $\hat{\alpha}_1$, persistence, and one-step-ahead variance forecast ratio.
-
-#### Mathematical Formulas
-Persistence: $\alpha_1$  
-Unconditional Variance: $\sigma^2 = \frac{\omega}{1 - \alpha_1}$  
-One-Step-Ahead Variance Forecast Ratio: $$\frac{\sigma_{t+1}^2}{\bar{\sigma}^2} = \frac{\omega + \alpha_1 r_t^2}{\text{Var}(r)}$$
-
----
-
-## Summary Table of Outputs & Validations
-
-| Task ID | Output Parameter | Metric / Description | Theoretical Target / Formula |
-|:---|:---|:---|:---|
-| P1.1 | mean, std | Log-return distribution moments | Empirical calculations on continuous returns |
-| P1.2 | returns_pvalue | ADF test $p$-value | $p < 0.05 \implies$ Rejection of unit root $H_0$ |
-| P2.1 | optimal_order | Model selection $(p, d, q)$ | Minimized Akaike Information Criterion ($\text{AIC}$) |
-| P3.1 | variance_ratio | Volatility shock forecast impact | $\frac{\omega + \alpha_1 r_T^2}{\text{Var}(r)}$ |
-"""
-
-import numpy as np
-import pandas as pd
-from scipy.stats import skew, kurtosis
-from statsmodels.tsa.stattools import adfuller
-from statsmodels.tsa.arima.model import ARIMA
-from arch import arch_model
+This project characterizes and compares non-spheroidized (gas atomized) and spheroidized (plasma spheroidized) Ti-6Al-4V powders. Key properties analyzed include flowability, apparent and tap density, particle size distribution, particle shape, morphology via SEM, and chemical composition via SEM-EDS.
 
 
-# ==========================================
-# PART 1: PREPROCESSING & STATIONARITY
-# ==========================================
+## 1. Introduction
 
-def compute_return_statistics(prices: pd.Series) -> dict:
-    """
-    Computes log-returns and baseline descriptive statistics.
-    
-    Parameters
-    ----------
-    prices : pd.Series
-        Series of daily closing prices.
-        
-    Returns
-    -------
-    dict
-        Summary statistics rounded to 6 decimal places.
-    """
-    # 1. Compute log returns
-    log_returns = np.log(prices / prices.shift(1)).dropna()
-    
-    # 2. Summary statistics
-    mean_ret = log_returns.mean()
-    std_ret = log_returns.std(ddof=1)
-    skew_ret = skew(log_returns)
-    kurt_ret = kurtosis(log_returns, fisher=True)  # Excess kurtosis (Normal = 0)
-    
-    return {
-        'mean': float(np.round(mean_ret, 6)),
-        'std': float(np.round(std_ret, 6)),
-        'skewness': float(np.round(skew_ret, 6)),
-        'excess_kurtosis': float(np.round(kurt_ret, 6)),
-        'log_returns': log_returns
-    }
+Powder Characterization and Testing are essential for gaining a thorough understanding of the physical and technological properties of powders, contributing to the optimization of processes and the assurance of quality outcomes. This report investigates key aspects of powders, including flowability, density, morphology, and chemical composition, aiming to provide comprehensive insights into their behavior and performance.
 
+## 2. Objectives
 
-def run_adf_diagnostics(prices: pd.Series, log_returns: pd.Series) -> dict:
-    """
-    Performs ADF unit root tests on prices and log-returns.
-    """
-    # ADF test on raw price level
-    adf_price_stat, adf_price_p, _, _, _, _ = adfuller(prices.dropna(), autolag='AIC')
-    
-    # ADF test on log-returns
-    adf_ret_stat, adf_ret_p, _, _, _, _ = adfuller(log_returns.dropna(), autolag='AIC')
-    
-    return {
-        'price_adf_stat': float(np.round(adf_price_stat, 4)),
-        'price_pvalue': float(np.round(adf_price_p, 4)),
-        'returns_adf_stat': float(np.round(adf_ret_stat, 4)),
-        'returns_pvalue': float(np.round(adf_ret_p, 4)),
-        'returns_is_stationary': bool(adf_ret_p < 0.05)
-    }
+This study aims to conduct a thorough comparison between spheroidized and non-spheroidized powders by analyzing their flowability, tap density, morphology, and chemical composition. Flowability testing will assess the ease of powder flow, while tap density measurements will evaluate packing efficiency. Morphological analysis will examine particle size distribution and shape consistency, utilizing SEM imaging and laser diffraction. Chemical composition will be compared using SEM-EDS to quantify elemental makeup and distribution. This comprehensive approach will provide valuable insights into the physical, morphological, and chemical properties of the powders, aiding in informed decision-making for diverse industrial applications.
 
+## 3. Powder Types and Manufacturing Processes
 
-# ==========================================
-# PART 2: ARIMA MODEL ESTIMATION
-# ==========================================
+The two powders that are studied in this paper are: non-spheroidized and spheroidized Ti-6Al-4V alloy.
 
-def fit_optimal_arima(log_returns: pd.Series, max_p: int = 3, max_q: int = 3) -> dict:
-    """
-    Performs grid search to identify optimal ARIMA(p,0,q) specification by AIC.
-    """
-    best_aic = float('inf')
-    best_order = (0, 0, 0)
-    best_model_res = None
-    
-    for p in range(max_p + 1):
-        for q in range(max_q + 1):
-            try:
-                model = ARIMA(log_returns, order=(p, 0, q))
-                res = model.fit()
-                if res.aic < best_aic:
-                    best_aic = res.aic
-                    best_order = (p, 0, q)
-                    best_model_res = res
-            except Exception:
-                continue
-                
-    return {
-        'optimal_order': best_order,
-        'aic': float(np.round(best_aic, 4)),
-        'params': best_model_res.params.round(6).to_dict() if best_model_res is not None else {}
-    }
+- **Non-spheroidized powder (NS)** has been manufactured using the Gas Atomization technology; a process that takes a melted sample of a metal alloy and creates a melt stream. The melt stream is then impinged with a powerful atomization gas that causes dispersion and creates particles. The particles or droplets then fall and cool as they make contact with a substrate or metal plate. This method involves the conversion of liquid metal into fine powder particles through the use of a high-velocity gas stream. The process is commonly used for the production of metal powders with specific characteristics, including spherical shapes and a narrow size distribution.
 
+- **Spheroidized powder (S)** has been produced by Plasma Spheroidization; this process begins with gas atomization, where molten metal is atomized into fine droplets using a high-velocity gas stream, which is then introduced into a chamber where it comes into contact with a high-temperature plasma torch. The plasma flame is directed onto the incoming powder particles. The extreme heat generated by the plasma torch causes rapid heating of the powder. As the molten material moves through the plasma flame, surface tension forces act to round off irregularities and reshape the particles into more spherical forms. Once the particles pass through the plasma flame, they cool and solidify into spherical or near-spherical shapes. The rapid cooling helps to “freeze” the improved spherical morphology. Powders fabricated by plasma spheroidization have many advantages such as high spheroidization ratio, narrow size distribution and good flowability, which make it the most ideal method to fabricate spherical Ti-6Al-4V powder.
 
-# ==========================================
-# PART 3: BASELINE ARCH(1) ESTIMATION
-# ==========================================
+## 4. Flowability
 
-def fit_arch1_model(log_returns: pd.Series) -> dict:
-    """
-    Fits an ARCH(1) model with Normal innovations to log-returns.
-    
-    Parameters
-    ----------
-    log_returns : pd.Series
-        Daily log-returns array/series.
-        
-    Returns
-    -------
-    dict
-        Contains omega, alpha1, model persistence, and unconditional variance.
-    """
-    # 1. Initialize and fit ARCH(1) zero-mean model
-    am = arch_model(log_returns, vol='ARCH', p=1, q=0, mean='Zero', dist='Normal', rescale=False)
-    res = am.fit(disp='off')
-    
-    # 2. Extract parameters
-    omega = float(res.params['omega'])
-    alpha1 = float(res.params['alpha[1]'])
-    
-    # 3. Calculate derived metrics
-    persistence = alpha1
-    unconditional_variance = omega / (1.0 - alpha1) if alpha1 < 1.0 else np.nan
-    
-    # 4. One-step-ahead forecast for the latest period
-    last_return_sq = float(log_returns.iloc[-1] ** 2)
-    one_step_var_forecast = omega + alpha1 * last_return_sq
-    sample_variance = float(np.var(log_returns, ddof=1))
-    variance_ratio = one_step_var_forecast / sample_variance
-    
-    return {
-        'omega': float(np.round(omega, 6)),
-        'alpha1': float(np.round(alpha1, 6)),
-        'persistence': float(np.round(persistence, 6)),
-        'unconditional_variance': float(np.round(unconditional_variance, 6)),
-        'variance_ratio_latest': float(np.round(variance_ratio, 6))
-    }
+The flowability of a powder stands as a pivotal element influencing the effectiveness of Additive Manufactured parts. Powder exhibiting favorable flowability ensures even spreading, resulting in greater stability in the performance of the molded product. Factors such as powder morphology, particle size distribution, and moisture content significantly contribute to flowability. For this study, a titanium alloy (Ti-6Al-4V) in two different conditions was studied: not spheroidized (prepared by gas atomization) and spheroidized (prepared by plasma spheroidization).
 
+For measuring the flowability of the powders, a Hall funnel was used following the ASTM B 213 standard for metallic powders. This procedure was followed: a 50-gram dry sample of the powder is introduced into the funnel, with the orifice initially manually blocked with the fingertip. Upon removing the fingertip, the stopwatch is initiated, and the timing concludes right when the final particles exit the funnel. The flowability of the sample is denoted as the time in seconds required for 50 g of the powder to pass through the orifice (s/50 g).
 
-# ==========================================
-# EXECUTION TEST & VALIDATION RUNNER
-# ==========================================
+![Hall funnel for flowability measurement](https://github.com/wisemansg/powdercharacterization/raw/main/assets/Hall%20funnel%20for%20flowability%20measurement.jpeg)
 
-if __name__ == "__main__":
-    print("Executing MScFE 610 Graded Code Activity 1 Pipeline...\n")
-    
-    # Generate reproducible synthetic price data
-    np.random.seed(42)
-    n_days = 500
-    price_paths = 100.0 * np.exp(np.cumsum(np.random.normal(0.0005, 0.015, n_days)))
-    prices_series = pd.Series(price_paths, name="Close")
-    
-    # Test Part 1.1
-    stats_res = compute_return_statistics(prices_series)
-    print("--- Part 1.1: Return Statistics ---")
-    print(f"Mean: {stats_res['mean']}, Std: {stats_res['std']}, Skew: {stats_res['skewness']}, Excess Kurt: {stats_res['excess_kurtosis']}")
-    
-    # Test Part 1.2
-    adf_res = run_adf_diagnostics(prices_series, stats_res['log_returns'])
-    print("\n--- Part 1.2: ADF Stationarity ---")
-    print(f"Returns ADF p-value: {adf_res['returns_pvalue']} | Is Stationary: {adf_res['returns_is_stationary']}")
-    
-    # Test Part 2.1
-    arima_res = fit_optimal_arima(stats_res['log_returns'], max_p=2, max_q=2)
-    print("\n--- Part 2.1: ARIMA Grid Search ---")
-    print(f"Optimal Order: {arima_res['optimal_order']} | AIC: {arima_res['aic']}")
-    
-    # Test Part 3.1
-    arch_res = fit_arch1_model(stats_res['log_returns'])
-    print("\n--- Part 3.1: ARCH(1) Estimation ---")
-    print(f"Omega: {arch_res['omega']} | Alpha1: {arch_res['alpha1']} | Variance Ratio: {arch_res['variance_ratio_latest']}")
+**Figure 1**: Hall funnel for flowability measurement
+
+![Flowability measured for Ti-6Al-4V powders (NS and S)](https://github.com/wisemansg/powdercharacterization/raw/main/assets/Flowability%20measured%20for%20Ti-6Al-4V%20powders%20(NS%20and%20S).jpeg)
+
+**Figure 2**: Flowability measured for Ti-6Al-4V powders (NS and S)
+
+The results obtained by the measurement are displayed in Figure 2. The non-spheroidized powder is denoted by NS and the spheroidized powder is denoted by S. A different value of flowability is observed for both powders, with the spheroidized powder having a better flowability (see Table 1).
+
+**Table 1**: Flowability values and its measurement error
+
+| Powder              | Flowability (s/50 g)   |
+|---------------------|------------------------|
+| Ti-6Al-4V (NS)      | 37.736 ± 2.935         |
+
+We can see that the spheroidized powder has a better flowability (lower value). This means that the powder flows more easily and quickly through an orifice, reflecting better handling characteristics and improved efficiency which is beneficial for various manufacturing processes.
+
+## 5. Apparent and Tap Density
+
+Apparent density is the mass of a powder per unit volume (g/cm³), considering the total volume occupied by the powder particles and the void spaces between them. Apparent density of a metal powder strongly depends on the particle size. Usually, it decreases with decreasing particle size, and it also decreases as the particle shape becomes more irregular. For powders exhibiting a broad spectrum of particle sizes, the apparent density tends to rise as the gaps between larger particles get occupied by smaller particles.
+
+On the other hand, tap density refers to the density of a powder when it has been tapped into a container under specific conditions. Essentially, it quantifies how closely the particles of the powder pack together after tapping. Tap density is a function of particle size distribution, particle shape, and surface roughness. Tap density is always higher than the free-flow apparent density and it helps assess the flowability, compressibility, and handling characteristics of powders.
+
+For measuring the apparent density, a Hall funnel was also used following the standard ASTM B 212. The procedure consisted in placing 50 grams of powder in a graduated glass cylinder of 100 cm³ and the volume of the powder was measured for calculating the apparent density using Equation 1. For the tap density, the graduated cylinder with the powder was placed in a tapping apparatus following standard ASTM B 527. The evolution of the volume with respect to the number of taps was measured and Equation 1 was also used for calculating the tap density for each number of taps.
+
+$$
+TD = \frac{M}{V}
+$$
+
+**Equation 1**: Tap density calculation (where M is mass and V is volume)
+
+![Tapping apparatus for measuring tap density](https://github.com/wisemansg/powdercharacterization/raw/main/assets/Tapping%20apparatus%20for%20measuring%20tap%20density.jpeg)
+
+**Figure 3**: Tapping apparatus for measuring tap density
+
+![Tap density measured for Ti-6Al-4V powders (NS and S)](https://github.com/wisemansg/powdercharacterization/raw/main/assets/Tap%20density%20measured%20for%20Ti-6Al-4V%20powders%20(NS%20and%20S).jpeg)
+
+**Figure 4**: Tap density measured for Ti-6Al-4V powders (NS and S)
+
+The results for both non-spheroidized and spheroidized powder (NS and S) can be seen in Figure 4. Note that apparent density is equal to tap density without any taps. As we can observe, the tap density is increasing in both powders for each number of taps. 3000 is the final number of taps measured as it has been proven to be efficient for finding the final tap density. We can also observe a difference between both powders, where the spheroidized one has a higher apparent and tap density.
+
+Additionally, compressibility index/Carr’s index and Hausner ratio was calculated for characterizing the flowability (packing factor) in both powders. The results for all the measurements can be seen in Table 2.
+
+**Table 2**: Apparent and Tap densities measured and its packing factor
+
+| Powder              | Apparent density (g/cm³) | Tap density (g/cm³) | Carr’s index (%) | Hausner ratio | Flowability |
+|---------------------|---------------------------|---------------------|------------------|---------------|-------------|
+| Ti-6Al-4V (NS)      | 2.131 ± 0.037            | 2.489 ± 0.016      | 14.37            | 1.17          | Good        |
+| Ti-6Al-4V (S)       | 2.440 ± 0.000            | 2.753 ± 0.029      | 11.38            | 1.13          | Good        |
+
+As we can observe, both powders (NS and S) have good flowabilities according to their Carr’s indexes and Hausner ratios. However, the powder that has been spheroidized has better packing factor. This means that powder particles can move easier and more uniformly, allowing for a smooth and consistent flow. Also, it means that the powder particles can rearrange themselves with less resistance and occupy a more compact arrangement during tapping.
+
+## 6. Morphology
+
+Particle image analysis is used for the measurement of particle size, characterization of particle shape and morphological analysis. Optical microscopy serves as a highly precise method for particle image analysis, enabling the observation and measurement of individual particles. Advanced techniques such as scanning electron microscopy and transmission electron microscopy facilitate the analysis of nano and smaller particles. ASTM Standard E20 provides details on using optical microscopy for particle sizing.
+
+In our particle image analysis method, a precise quantity of the powder sample is carefully measured and deposited onto the observational mirror of a microscope. To ensure uniform spreading of the powder across the mirror’s surface, vacuum technology was employed to create a controlled environment. This vacuum facilitates the even distribution of the particles, eliminating clumping or uneven distribution that could compromise the accuracy of the analysis. The analysis is conducted using a microscope, and the resulting data is meticulously recorded and observed through specialized software. This systematic approach enhances the accuracy and reliability of the particle image analysis process, ensuring comprehensive insights into the powder’s characteristics.
+
+![a) Vacuum system for particle uniform spreading b) Microscope for particle image analysis](https://github.com/wisemansg/powdercharacterization/raw/main/assets/a)%20Vacuum%20system%20for%20particle%20uniform%20spreading%20b)%20Microscope%20for%20particle%20image%20analysis.jpeg)
+
+**Figure 5**: a) Vacuum system for particle uniform spreading b) Microscope for particle image analysis
+
+### Particle Size Distribution Analysis
+
+Particle size distribution analysis is a technique used to determine the range of sizes present in a sample of particles. These measurements involve determining the sizes of particles, which are then utilized to categorize the two-dimensional images of particles based on an equivalent spherical particle. The area-equivalent diameter refers to the diameter of a circle having the same area as the projected area of the particle. In other words, it represents the diameter of a circle that covers the same amount of area as the irregularly shaped particle when viewed from a certain perspective. This parameter is commonly used in particle size analysis to simplify the representation of particle sizes.
+
+Figure 6 and Figure 7 show the diameters and cumulative size distributions for gas atomized (NS) and spheroidized (S) powders. The box plot and error bars with standard deviation are plotted for the three datasets to show uncertainty and distribution of results of experiments using Python. For both powders the particle size range was found to be between 5 µm and 115 µm while the mean particle size was found to be 35 µm. The cumulative curves showed that both powders contain 50% of the particles <40 µm. From the box plots and error bars, it can be observed that an improvement is seen in the estimation of the true particle size of S powder. This indicates that spheroidized particles exhibit a more regular shape, leading to increased measurement consistency and reduced variability, resulting in smaller error bars. This contrast highlights the importance of particle shape on measurement precision in powder characterization.
+
+![Diameter size distribution for gas atomized powder (NS)](https://github.com/wisemansg/powdercharacterization/raw/main/assets/Diameter%20size%20distribution%20for%20gas%20atomized%20powder%20(NS).jpeg)
+
+**Figure 6**: Diameter size distribution for gas atomized powder (NS)
+
+![Diameter size distribution for spheroidized powder (S)](https://github.com/wisemansg/powdercharacterization/raw/main/assets/Diameter%20size%20distribution%20for%20spheroidized%20powder%20(S).jpeg)
+
+**Figure 7**: Diameter size distribution for spheroidized powder (S)
+
+### Particle Shape
+
+The shape of particles is characterized by their form (overall shape), roundness (large-scale smoothness/angularity), and surface texture (small-scale smoothness/roughness). The shape factor dimensionless quantities used in image analysis and microscopy that numerically describe the shape of a particle. The most commonly used factors are:
+
+- **Aspect Ratio** is defined as the ratio of the Feret’s minimum length to the Feret’s maximum length, always falling within the range 0 < AR ≤ 1 and expressed as a dimensionless value.
+- **Circularity** measures the degree to which the projection of a particle resembles a circle, considering both the particle’s form and the smoothness of its perimeter.
+
+The circularity analysis conducted on NS and S powders revealed distinctive characteristics in their particle shapes and uniformity (Figure 8 and Figure 9). In the case of NS powder, circularity values spanned from 40% to 100%, reflecting a diverse range of particle shapes and sizes. Notably, over 50% of the NS powder particles exhibited circularity values surpassing 90%, indicating a substantial proportion of particles with high circularity. While the S powder exhibited a narrower circularity range of 50% to 100%, with more than 95% of its particles achieving circularity values exceeding 90%. This suggests a higher prevalence of nearly spherical or highly regular-shaped particles within the S powder sample. Furthermore, the analysis revealed a lower spreading of box plots and smaller error bars for the S powder, indicating a higher degree of uniformity in particle shapes compared to the NS powder.
+
+![Shape distributions for gas atomized powder (NS)](https://github.com/wisemansg/powdercharacterization/raw/main/assets/Shape%20distributions%20for%20gas%20atomized%20powder%20(NS).jpeg)
+
+**Figure 8**: Shape distributions for gas atomized powder (NS)
+
+![Shape distributions for spheroidized powder (S)](https://github.com/wisemansg/powdercharacterization/raw/main/assets/Shape%20distributions%20for%20spheroidized%20powder%20(S).jpeg)
+
+**Figure 9**: Shape distributions for spheroidized powder (S)
+
+## 7. Material Characterization
+
+### Identification of the Powder Type
+
+The SEM examination of two powder samples, one subjected to spheroidization and the other non-spheroidized, observations were made at 500x magnification using both BSE and SE imaging. Notably, the non-spheroidized powder (Figure 10) exhibited a higher prevalence of small satellite particles surrounding larger powder particles. The discernible presence of small satellite particles around larger ones in the non-spheroidized powder provides a clear visual indicator distinguishing it from the spheroidized (Figure 11) counterpart. This visual evidence establishes a reliable method for identifying whether a powder has undergone spheroidization, contributing valuable insights into the morphological characteristics of the examined samples.
+
+![Microscopic view of powder sample NS a) BSE b) SE](https://github.com/wisemansg/powdercharacterization/raw/main/assets/Microscopic%20view%20of%20powder%20sample%20NS%20a)%20BSE%20b)%20SE.jpeg)
+
+**Figure 10**: Microscopic view of powder sample NS a) BSE b) SE
+
+![Microscopic view of powder sample S c) BSE d) SE](https://github.com/wisemansg/powdercharacterization/raw/main/assets/Microscopic%20view%20of%20powder%20sample%20S%20%20c)%20BSE%20d)%20SE%20.jpeg)
+
+**Figure 11**: Microscopic view of powder sample S c) BSE d) SE
+
+### Chemical Composition
+
+#### Non-Spheroidized (NS)
+
+The SEM analysis of the powder in two distinct zones reveals nuanced variations in elemental composition. In Zone 9, there is a marginal reduction in Titanium content, suggesting a localized difference in the powder’s composition. Conversely, Aluminium and Vanadium exhibit slight increases in Zone 9 compared to Zone 8. The absolute errors associated with the measurements are minimal, affirming the reliability and precision of the analytical technique. The Netto values, representing net intensities, indicate disparities in element concentrations between the zones, with higher values signifying a more pronounced presence of specific elements.
+
+![Identification of Zones and Material Characterization graphs Zone 8 and Zone 9](https://github.com/wisemansg/powdercharacterization/raw/main/assets/(a)%20Identification%20of%20Zones%20(b)%20Material%20Characterization%20graph%20Zone%208%20(c)%20Material%20characterization%20graph%20Zone%209.jpeg)
+
+**Figure 12**: (a) Identification of Zones (b) Material Characterization graph Zone 8 (c) Material characterization graph Zone 9
+
+![Material Characteristic data comparison between Zone 8 and Zone 9](https://github.com/wisemansg/powdercharacterization/raw/main/assets/Material%20Characteristic%20data%20comparison%20between%20Zone%208%20and%20Zone%209.jpeg)
+
+**Figure 13**: Material Characteristic data comparison between Zone 8 and Zone 9
+
+**Table 3**: Chemical composition parameters (NS)
+
+| Element              | Atomic No. | Netto  | Mass (%) | Mass Normal (%) | Atom (%) | Abs error (%) (1σ) | Rel. error (%) (1σ) |
+|----------------------|------------|--------|----------|-----------------|----------|--------------------|---------------------|
+| Titanium (Z8)        | 22         | 135150 | 83.12    | 90.73           | 87.49    | 2.34               | 2.81                |
+| Aluminum (Z8)        | 13         | 9506   | 4.68     | 5.11            | 8.74     | 0.26               | 5.64                |
+| Vanadium (Z8)        | 23         | 5776   | 3.81     | 4.16            | 3.77     | 0.19               | 4.96                |
+| Titanium (Z9)        | 22         | 137800 | 81.44    | 90.49           | 86.77    | 2.29               | 2.81                |
+| Aluminum (Z9)        | 13         | 9131   | 5.24     | 5.82            | 9.90     | 0.29               | 5.59                |
+| Vanadium (Z9)        | 23         | 5186   | 3.32     | 3.69            | 3.32     | 0.18               | 5.34                |
+
+#### Spheroidized (S)
+
+Continuing from the previous experiments, the SEM analysis of the powder in two additional zones sheds further light on its chemical composition. In Zone 11, similar trends to Zone 9 are observed, with a marginal reduction in Titanium content and slight fluctuations in Aluminum and Vanadium mass percentages compared to Zone 10. The absolute errors associated with the measurements remain consistently low across all zones, indicating reliable and precise data collection. Netto values continue to reveal variations in element concentrations between the zones, reaffirming the heterogeneous nature of the powder.
+
+![Identification of zones and Material Characterization graphs Zone 10 and Zone 11](https://github.com/wisemansg/powdercharacterization/raw/main/assets/(a)%20Identification%20of%20zones%2C%20(b)%20Material%20Characterization%20graph%20Zone%2010%2C%20(c)%20Material%20characterization%20graph%20Zone%2011.jpeg)
+
+**Figure 14**: (a) Identification of zones, (b) Material Characterization graph Zone 10, (c) Material characterization graph Zone 11
+
+![Material Characteristic data comparison between Zone 10 and Zone 11](https://github.com/wisemansg/powdercharacterization/raw/main/assets/Material%20Characteristic%20data%20comparison%20between%20Zone%2010%20and%20Zone%2011.jpeg)
+
+**Figure 15**: Material Characteristic data comparison between Zone 10 and Zone 11
+
+**Table 4**: Chemical composition parameters (S)
+
+| Element              | Atomic No. | Netto  | Mass (%) | Mass Normal (%) | Atom (%) | Abs error (%) (1σ) | Rel. error (%) (1σ) |
+|----------------------|------------|--------|----------|-----------------|----------|--------------------|---------------------|
+| Titanium (Z10)       | 22         | 132057 | 79.5     | 89.7            | 85.8     | 2.24               | 2.82                |
+| Aluminum (Z10)       | 13         | 11114  | 5.5      | 6.2             | 10.5     | 0.30               | 5.51                |
+| Vanadium (Z10)       | 23         | 5866   | 3.7      | 4.2             | 3.7      | 0.18               | 4.94                |
+| Titanium (Z11)       | 22         | 133182 | 76.8     | 89.4            | 85.5     | 2.16               | 2.82                |
+| Aluminum (Z11)       | 13         | 10317  | 5.3      | 6.2             | 10.6     | 0.30               | 5.55                |
+| Vanadium (Z11)       | 23         | 5984   | 3.7      | 4.4             | 3.9      | 0.18               | 4.89                |
+
+The combination of SEM analysis and quantitative data reaffirms the nuanced variations in the chemical composition of the powder. These findings provide valuable insights into the elemental distribution and characteristics of the material, further enriching our understanding of its properties and potential applications.
+
+## 8. Conclusions
+
+- In powder characterization literature, in which the gas atomization and the plasma spheroidization processes are compared, plasma spheroidization produces generally smaller powder particles, as well as more rounded ones; opposed to gas atomization which provides bigger particles with some satellites. However, when examining the results for the densities as well as flowability, in literature, both powders have quite similar results for flowability and densities, with plasma spheroidization having slightly lower flowability time and higher apparent density than gas atomization.
+
+- We observed a difference between NS and S powders. With the spheroidized powder obtaining better results in terms of flowability and tap density. This can be due to its reduced surface area, uniform shape, better packing efficiency, less segregation and better dispersion of the particles. This causes spheroidized powder to have better manufacturing efficiency, higher product quality and enhanced cost-effectiveness.
+
+- The comparison between NS and S powders highlights their contrasting particle size distributions and shape uniformity, emphasizing the distinct influence of the spheroidization process on enhancing particle geometries. Spheroidization demonstrates an excellent capability in improving particle shapes, particularly evident in the enhanced uniformity and regularity observed in S powder compared to NS powder, as seen in powder morphology distributions and the narrower circularity ranges with smaller errors in the S powder analysis. These findings underscore the advantages of spheroidized particles in achieving consistent and predictable powder properties for diverse applications.
+
+- The distinction between spheroidized and non-spheroidized powder was discerned through SEM analysis, where the presence of numerous small satellite particles surrounding larger particles was observed. Additionally, the nuanced variations in chemical composition between different zones of the powders, with variations observed in Titanium, Aluminum, and Vanadium content. Absolute errors associated with the measurements were consistently low, indicating reliable data collection.
+
+## 🛠️ Tools & Methods Used
+
+- Hall Funnel (ASTM B 213 / ASTM B 212)
+- Tapping Apparatus (ASTM B 527)
+- Optical Microscopy with Vacuum Spreading System
+- Scanning Electron Microscopy (SEM) – BSE & SE modes
+- SEM-EDS for Chemical Composition Analysis
+- Python for data analysis, box plots, and error bar visualization
+- Particle image analysis software
+```
